@@ -149,8 +149,14 @@ async function run() {
         res.json(result);
       })
       .get('/orders', async (req, res) => {
+        const { email } = req.query;
         const orders = await ordersCollection.find({}).toArray();
-        res.send(orders);
+        if (email) {
+          const myOrders = orders.filter((order) => order.email === email);
+          res.send(myOrders);
+        } else {
+          res.send(orders);
+        }
       });
   } finally {
     // await client.close();
