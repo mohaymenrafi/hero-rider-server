@@ -32,8 +32,39 @@ async function run() {
       })
       .get('/users', async (req, res) => {
         const users = await usersCollection.find({}).toArray();
-        res.send(users);
+        // filtering out admin from user api
+        const adminFilter = users.filter(
+          (user) => user.email !== 'admin@admin.com'
+        );
+        // apply filters
+        const { email, phone, fullName } = req.query;
+        let userFilter = [...adminFilter];
+        if (email) {
+          userFilter = userFilter.filter((user) => user.email.includes(email));
+          console.log(userFilter);
+        }
+        if (phone) {
+          userFilter = userFilter.filter((user) => user.phone.includes(phone));
+        }
+        if (fullName) {
+          userFilter = userFilter.filter((user) =>
+            user.fullName.includes(fullName)
+          );
+        }
+        res.send(userFilter);
       });
+
+    // find admin
+    app.get('/users/:email', async (req, res) => {
+      const { email } = req.params;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
+      let isAdmin = false;
+      if (user?.role === 'admin') {
+        isAdmin = true;
+      }
+      res.json({ admin: isAdmin });
+    });
   } finally {
     // await client.close();
   }
