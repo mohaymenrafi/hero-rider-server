@@ -1,8 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const { MongoClient } = require('mongodb');
-
+const { ObjectId } = require('mongodb');
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET);
 
 const port = process.env.PORT || 5000;
 const app = express();
@@ -22,6 +23,8 @@ async function run() {
     await client.connect();
     const database = client.db('hero-rider');
     const usersCollection = database.collection('users');
+    const coursesCollection = database.collection('Courses');
+    const ordersCollection = database.collection('orders');
 
     // users post and get from database
     app
@@ -31,14 +34,36 @@ async function run() {
         res.json(newUser);
       })
       .get('/users', async (req, res) => {
-        const users = await usersCollection.find({}).toArray();
+        const cursor = usersCollection.find({});
+        // page count
+        const count = await cursor.count();
+        const { pageIndex } = req.query;
+        const size = parseInt(req.query.size);
+        console.log(pageIndex, size);
+        // // pagination limit
+        let users;
+        if (pageIndex) {
+          users = await cursor
+            .skip(pageIndex * size)
+            .limit(size)
+            .toArray();
+        } else {
+          users = await cursor.toArray();
+        }
+        // console.log(users);
+
         // filtering out admin from user api
         const adminFilter = users.filter(
           (user) => user.email !== 'admin@admin.com'
         );
-        // apply filters
-        const { email, phone, fullName } = req.query;
+
+        // new product filtered
         let userFilter = [...adminFilter];
+        console.log(userFilter);
+        console.log(`---------`);
+
+        const { email, phone, fullName, age } = req.query;
+        // apply filters
         if (email) {
           userFilter = userFilter.filter((user) => user.email.includes(email));
           console.log(userFilter);
@@ -51,7 +76,30 @@ async function run() {
             user.fullName.includes(fullName)
           );
         }
-        res.send(userFilter);
+        switch (age) {
+          case '51':
+            userFilter = userFilter.filter((user) => parseInt(user.age) > 51);
+            break;
+          case '50':
+            userFilter = userFilter.filter(
+              (user) => parseInt(user.age) > 40 && parseInt(user.age) < 51
+            );
+            break;
+          case '40':
+            userFilter = userFilter.filter(
+              (user) => parseInt(user.age) > 30 && parseInt(user.age) < 41
+            );
+            break;
+          case '30':
+            userFilter = userFilter.filter(
+              (user) => parseInt(user.age) > 17 && parseInt(user.age) < 31
+            );
+            break;
+          default:
+            break;
+        }
+        console.log(userFilter);
+        res.send({ count, userFilter });
       });
 
     // find admin
@@ -65,6 +113,45 @@ async function run() {
       }
       res.json({ admin: isAdmin });
     });
+
+    // get courses
+    app.get('/courses', async (req, res) => {
+      const cursor = coursesCollection.find({});
+      const courses = await cursor.toArray();
+      res.send(courses);
+    });
+    app.get('/courses/:id', async (req, res) => {
+      const { id } = req.params;
+      const query = { _id: ObjectId(id) };
+      const result = await coursesCollection.findOne(query);
+      res.send(result);
+    });
+
+    // Stripe
+    app.post('/create-payment-intent', async (req, res) => {
+      const paymentInfo = req.body;
+      const amount = paymentInfo.price * 100;
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount,
+        currency: 'usd',
+        payment_method_types: ['card'],
+      });
+      res.json({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
+
+    // post order
+    app
+      .post('/orders', async (req, res) => {
+        const order = req.body;
+        const result = await ordersCollection.insertOne(order);
+        res.json(result);
+      })
+      .get('/orders', async (req, res) => {
+        const orders = await ordersCollection.find({}).toArray();
+        res.send(orders);
+      });
   } finally {
     // await client.close();
   }
