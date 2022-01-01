@@ -35,12 +35,10 @@ async function run() {
       })
       .get('/users', async (req, res) => {
         const cursor = usersCollection.find({});
-        // page count
         const count = await cursor.count();
         const { pageIndex } = req.query;
         const size = parseInt(req.query.size);
-        console.log(pageIndex, size);
-        // // pagination limit
+        console.log({ pageIndex, size });
         let users;
         if (pageIndex) {
           users = await cursor
@@ -50,30 +48,21 @@ async function run() {
         } else {
           users = await cursor.toArray();
         }
-        // console.log(users);
-
-        // filtering out admin from user api
-        const adminFilter = users.filter(
-          (user) => user.email !== 'admin@admin.com'
-        );
-
-        // new product filtered
-        let userFilter = [...adminFilter];
-        console.log(userFilter);
-        console.log(`---------`);
+        console.log(users);
+        users = users.filter((user) => user.email !== 'admin@admin.com');
+        let userFilter = [...users];
 
         const { email, phone, fullName, age } = req.query;
         // apply filters
         if (email) {
           userFilter = userFilter.filter((user) => user.email.includes(email));
-          console.log(userFilter);
         }
         if (phone) {
           userFilter = userFilter.filter((user) => user.phone.includes(phone));
         }
         if (fullName) {
           userFilter = userFilter.filter((user) =>
-            user.fullName.includes(fullName)
+            user.fullName.toLowerCase().includes(fullName.toLowerCase())
           );
         }
         switch (age) {
@@ -98,7 +87,6 @@ async function run() {
           default:
             break;
         }
-        console.log(userFilter);
         res.send({ count, userFilter });
       });
 
